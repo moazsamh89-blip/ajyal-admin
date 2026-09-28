@@ -16,6 +16,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Menu,
   RefreshCw,
   Save,
   Settings,
@@ -26,6 +27,7 @@ import {
   Users,
   UserX,
   UserPlus,
+  X,
 } from 'lucide-react'
 import {
   auth,
@@ -89,12 +91,8 @@ export interface CreatorEntry {
   id?: string
 }
 
-type RowValue = string | number | boolean | string[] | CreatorEntry[] | Record<string, unknown> | null
+type RowValue = string | number | boolean | string[] | CreatorEntry[] | null | any
 type RowData = Record<string, RowValue>
-
-const isCreatorEntry = (value: unknown): value is CreatorEntry => (
-  typeof value === 'object' && value !== null && !Array.isArray(value) && 'name' in value
-)
 
 interface FieldConfig {
   key: string
@@ -564,18 +562,17 @@ const normalizePayload = (form: RowData) => {
 
   // Normalize multiple creators and roles for covers
   if (Array.isArray(form.creators)) {
-    const validCreators = (form.creators as unknown[])
-      .filter(isCreatorEntry)
-      .filter((c) => String(c.name).trim())
-      .map((c) => ({
+    const validCreators = form.creators
+      .filter((c: any) => c && typeof c === 'object' && c.name && String(c.name).trim())
+      .map((c: any) => ({
         name: String(c.name).trim(),
         role: String(c.role || '').trim(),
         id: String(c.id || '').trim(),
       }))
     payload.creators = validCreators
     if (validCreators.length > 0) {
-      payload.creator_name = validCreators.map((c) => c.name).join(' ، ')
-      payload.creator_role = validCreators.map((c) => c.role ? `${c.name} (${c.role})` : c.name).join(' | ')
+      payload.creator_name = validCreators.map((c: any) => c.name).join(' ، ')
+      payload.creator_role = validCreators.map((c: any) => c.role ? `${c.name} (${c.role})` : c.name).join(' | ')
       payload.creator_id = validCreators[0]?.id || ''
     } else {
       payload.creator_name = ''
@@ -626,6 +623,36 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(true)
   const [previewStatus, setPreviewStatus] = useState<Record<string, 'ok' | 'error'>>({})
   const [allCovers, setAllCovers] = useState<RowData[]>([])
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Roles & Permissions:
+  // "واجع من يضاف كا مشرف لا يظهر له الازرار الاتية: تخصيص اسئلة التطوع الى اتصال فايربيس اما المسؤول العام يظهر له كل شيئ"
+  const isSuperAdmin = sessionRole === 'super_admin'
+  const SUPER_ADMIN_ONLY_KEYS = useMemo(
+    () => [
+      'volunteer_fields',
+      'volunteer_submissions',
+      'staff_members',
+      'system_errors',
+      'category_settings',
+      'admins',
+      'app_settings',
+      'connection',
+    ],
+    [],
+  )
+
+  const visibleConfigs = useMemo(() => {
+    if (isSuperAdmin) return configs
+    return configs.filter((c) => !SUPER_ADMIN_ONLY_KEYS.includes(c.key))
+  }, [isSuperAdmin, SUPER_ADMIN_ONLY_KEYS])
+
+  // Prevent non-super_admin from staying on restricted tabs
+  useEffect(() => {
+    if (!checkingSession && sessionEmail && !isSuperAdmin && SUPER_ADMIN_ONLY_KEYS.includes(activeKey)) {
+      setActiveKey('covers')
+    }
+  }, [checkingSession, sessionEmail, isSuperAdmin, activeKey, SUPER_ADMIN_ONLY_KEYS])
 
   const activeConfig = useMemo(
     () => configs.find((item) => item.key === activeKey),
@@ -700,8 +727,9 @@ export default function App() {
 
   const loadCounts = useCallback(async () => {
     const nextCounts: Record<string, number> = {}
+    const listToCount = isSuperAdmin ? configs : configs.filter((c) => !SUPER_ADMIN_ONLY_KEYS.includes(c.key))
     await Promise.all(
-      configs.map(async (config) => {
+      listToCount.map(async (config) => {
         try {
           if (config.key === 'app_settings') {
             const docSnap = await getDoc(doc(db, 'app_settings', '1'))
@@ -716,9 +744,12 @@ export default function App() {
       }),
     )
     setCounts(nextCounts)
-  }, [])
+  }, [isSuperAdmin, SUPER_ADMIN_ONLY_KEYS])
 
   const loadTable = useCallback(async (table: ContentTable) => {
+    if (!isSuperAdmin && SUPER_ADMIN_ONLY_KEYS.includes(table)) {
+      return
+    }
     setLoading(true)
     try {
       if (table === 'app_settings') {
@@ -885,9 +916,7 @@ export default function App() {
               name: payload.name || '',
             })
           }
-        } catch {
-          // Keep the staff update successful even if no matching admin record exists.
-        }
+        } catch (_) {}
       }
 
       setMessage(editingId ? 'تم تعديل العنصر بنجاح.' : 'تم حفظ العنصر بنجاح.')
@@ -930,16 +959,13 @@ export default function App() {
     } else if (clonedRow.avatar_url && !clonedRow.avatar) {
       clonedRow.avatar = clonedRow.avatar_url
     }
-    const creatorEntries = Array.isArray(clonedRow.creators)
-      ? (clonedRow.creators as unknown[]).filter(isCreatorEntry)
-      : []
-    const initialCreators = creatorEntries.length > 0
-      ? creatorEntries.map((c) => ({ name: c.name || '', role: c.role || '', id: c.id || '' }))
+    const initialCreators = Array.isArray(clonedRow.creators) && clonedRow.creators.length > 0
+      ? clonedRow.creators.map((c: any) => ({ name: c.name || '', role: c.role || '', id: c.id || '' }))
       : (clonedRow.creator_name
           ? [{ name: String(clonedRow.creator_name), role: String(clonedRow.creator_role || ''), id: String(clonedRow.creator_id || '') }]
           : [{ name: '', role: '', id: '' }])
 
-    const formObj: RowData = Object.fromEntries(
+    const formObj = Object.fromEntries(
       activeConfig.fields.map((field) => {
         const value = clonedRow[field.key]
         return [field.key, Array.isArray(value) ? value.join(', ') : value ?? '']
@@ -1066,17 +1092,34 @@ export default function App() {
 
   return (
     <div className="admin-shell" dir="rtl">
-      <aside className="admin-sidebar">
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand">
-          <img src={logo} alt="أجيال الإيمان" />
-          <div>
-            <h1>أجيال الإيمان</h1>
-            <p>لوحة التحكم والإدارة</p>
+          <div className="brand-title-wrap">
+            <img src={logo} alt="أجيال الإيمان" />
+            <div>
+              <h1>أجيال الإيمان</h1>
+              <p>لوحة التحكم والإدارة</p>
+            </div>
           </div>
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="إغلاق القائمة"
+          >
+            <X size={20} />
+          </button>
         </div>
 
         <nav>
-          {configs.map((config) => {
+          {visibleConfigs.map((config) => {
             const Icon = config.icon
             const active = activeKey === config.key
             return (
@@ -1084,7 +1127,10 @@ export default function App() {
                 key={config.key}
                 type="button"
                 className={active ? 'active' : ''}
-                onClick={() => setActiveKey(config.key)}
+                onClick={() => {
+                  setActiveKey(config.key)
+                  setSidebarOpen(false)
+                }}
               >
                 <Icon size={18} />
                 <span>{config.title}</span>
@@ -1095,20 +1141,25 @@ export default function App() {
             )
           })}
 
-          <button
-            type="button"
-            className={activeKey === 'connection' ? 'active' : ''}
-            onClick={() => setActiveKey('connection')}
-          >
-            <Flame size={18} color="#f59e0b" />
-            <span>اتصال Firebase</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              className={activeKey === 'connection' ? 'active' : ''}
+              onClick={() => {
+                setActiveKey('connection')
+                setSidebarOpen(false)
+              }}
+            >
+              <Flame size={18} color="#f59e0b" />
+              <span>اتصال Firebase</span>
+            </button>
+          )}
         </nav>
 
         <div className="auth-box">
           <div>
             <small>المشرف الحالي</small>
-            <p className="auth-user" title={sessionEmail}>
+            <p className="auth-user" title={sessionEmail || ''}>
               {sessionEmail}
             </p>
             {sessionRole && (
@@ -1126,14 +1177,25 @@ export default function App() {
 
       <main className="admin-content">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">أجيال الإيمان • الإدارة السحابية</span>
-            <h2>{activeKey === 'connection' ? 'إعدادات اتصال Firebase' : activeConfig?.title}</h2>
-            <p>
-              {activeKey === 'connection'
-                ? 'فحص ومراقبة الاتصال بقاعدة بيانات Cloud Firestore وحسابات المشرفين.'
-                : activeConfig?.description}
-            </p>
+          <div className="topbar-main">
+            <button
+              type="button"
+              className="mobile-sidebar-toggle"
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              aria-label="تبديل القائمة الجانبية"
+            >
+              <Menu size={22} />
+              <span>القائمة</span>
+            </button>
+            <div>
+              <span className="eyebrow">أجيال الإيمان • الإدارة السحابية</span>
+              <h2>{activeKey === 'connection' ? 'إعدادات اتصال Firebase' : activeConfig?.title}</h2>
+              <p>
+                {activeKey === 'connection'
+                  ? 'فحص ومراقبة الاتصال بقاعدة بيانات Cloud Firestore وحسابات المشرفين.'
+                  : activeConfig?.description}
+              </p>
+            </div>
           </div>
         </header>
 

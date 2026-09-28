@@ -457,24 +457,133 @@ td {
   }
 }
 
-@media (max-width: 1100px) {
-  .admin-shell,
-  .work-grid {
+/* ─── Mobile Sidebar & Responsive Controls ─── */
+.brand-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+}
+
+.sidebar-close-btn {
+  display: none;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.sidebar-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.topbar-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.mobile-sidebar-toggle {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  background: #0f172a;
+  color: #fca311;
+  border: 1px solid rgba(252, 163, 17, 0.35);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  transition: all 0.2s;
+}
+
+.mobile-sidebar-toggle:hover {
+  background: #1e293b;
+  border-color: #fca311;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 992px) {
+  .admin-shell {
     grid-template-columns: 1fr;
+    position: relative;
+  }
+
+  .mobile-sidebar-toggle {
+    display: inline-flex;
+  }
+
+  .sidebar-close-btn {
+    display: inline-flex;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 17, 34, 0.7);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 998;
+    animation: fadeIn 0.2s ease;
   }
 
   .admin-sidebar {
-    position: static;
-    height: auto;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 290px;
+    max-width: 86vw;
+    height: 100vh;
+    height: 100dvh;
+    z-index: 999;
+    background: #0b1329;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.65);
+    transform: translateX(105%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .admin-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .work-grid {
+    grid-template-columns: 1fr;
   }
 
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .admin-content {
+    padding: 16px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
   .topbar {
     flex-direction: column;
+    gap: 12px;
   }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* ─── Cover Styles ─── */

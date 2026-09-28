@@ -89,6 +89,6 @@ export async function uploadImageToImgBB(file: File): Promise<string> {
     if (error instanceof Error) {
       throw error;
     }
-    throw new Error('حدث خطأ غير متوقع أثناء رفع الصورة إلى ImgBB.', { cause: error });
+    throw new Error('حدث خطأ غير متوقع أثناء رفع الصورة إلى ImgBB.');
   }
 }
